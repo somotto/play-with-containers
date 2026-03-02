@@ -8,14 +8,15 @@ services:
       POSTGRES_PASSWORD: ${INVENTORY_DB_PASSWORD}
       POSTGRES_DB: ${INVENTORY_DB_NAME}
     volumes:
-      - inventory-db-data:/var/lib/postgresql/data
+      - inventory-db:/var/lib/postgresql/data
     networks:
-      - inventory-network
+      - app-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${INVENTORY_DB_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: always
 
   # PostgreSQL for Billing
   billing-db:
@@ -26,41 +27,38 @@ services:
       POSTGRES_PASSWORD: ${BILLING_DB_PASSWORD}
       POSTGRES_DB: ${BILLING_DB_NAME}
     volumes:
-      - billing-db-data:/var/lib/postgresql/data
+      - billing-db:/var/lib/postgresql/data
     networks:
-      - billing-network
+      - app-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${BILLING_DB_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: always
 
   # RabbitMQ
-  rabbitmq:
+  rabbit-queue:
     image: rabbitmq:3-management-alpine
-    container_name: rabbitmq
+    container_name: rabbit-queue
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    volumes:
-      - rabbitmq-data:/var/lib/rabbitmq
     networks:
-      - billing-network
-      - gateway-network
+      - app-network
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: always
 
   # Inventory Service
   inventory-app:
     build:
       context: ./srcs/inventory-app
       dockerfile: Dockerfile
+    image: inventory-app
     container_name: inventory-app
     environment:
       APP_PORT: ${INVENTORY_APP_PORT}
@@ -72,22 +70,22 @@ services:
       inventory-db:
         condition: service_healthy
     networks:
-      - inventory-network
-      - gateway-network
-    restart: unless-stopped
+      - app-network
+    restart: always
 
   # Billing Service
   billing-app:
     build:
       context: ./srcs/billing-app
       dockerfile: Dockerfile
+    image: billing-app
     container_name: billing-app
     environment:
       BILLING_DB_USER: ${BILLING_DB_USER}
       BILLING_DB_PASSWORD: ${BILLING_DB_PASSWORD}
       BILLING_DB_NAME: ${BILLING_DB_NAME}
       BILLING_DB_HOST: billing-db
-      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_HOST: rabbit-queue
       RABBITMQ_PORT: ${RABBITMQ_PORT}
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
@@ -95,45 +93,44 @@ services:
     depends_on:
       billing-db:
         condition: service_healthy
-      rabbitmq:
+      rabbit-queue:
         condition: service_healthy
     networks:
-      - billing-network
-    restart: unless-stopped
+      - app-network
+    restart: always
 
   # API Gateway
-  api-gateway:
+  api-gateway-app:
     build:
       context: ./srcs/api-gateway-app
       dockerfile: Dockerfile
-    container_name: api-gateway
+    image: api-gateway-app
+    container_name: api-gateway-app
     environment:
       APP_PORT: ${APIGATEWAY_PORT}
       INVENTORY_APP_HOST: inventory-app
       INVENTORY_APP_PORT: ${INVENTORY_APP_PORT}
-      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_HOST: rabbit-queue
       RABBITMQ_PORT: ${RABBITMQ_PORT}
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       RABBITMQ_QUEUE: ${RABBITMQ_QUEUE}
     ports:
       - "${APIGATEWAY_PORT}:${APIGATEWAY_PORT}"
+    volumes:
+      - api-gateway-app:/var/log/api-gateway
     depends_on:
       - inventory-app
-      - rabbitmq
+      - rabbit-queue
     networks:
-      - gateway-network
-    restart: unless-stopped
+      - app-network
+    restart: always
 
 networks:
-  inventory-network:
-    driver: bridge
-  billing-network:
-    driver: bridge
-  gateway-network:
+  app-network:
     driver: bridge
 
 volumes:
-  inventory-db-data:
-  billing-db-data:
-  rabbitmq-data:
+  inventory-db:
+  billing-db:
+  api-gateway-app:
