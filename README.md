@@ -76,6 +76,65 @@ sudo usermod -aG docker $USER
 
 ### 1. Clone and Setup
 
+```bash
+git clone <repository-url>
+cd crud-master
+```
+
+### 2. Configure Environment
+
+```bash
+# Copy example environment file
+cp .env.example .env
+
+# Edit .env with your preferred credentials (optional)
+nano .env
+```
+
+### 3. Build and Start Services
+
+```bash
+# Build images and start all containers
+sudo docker compose up --build -d
+
+# Or without sudo if you're in the docker group
+docker compose up --build -d
+```
+
+### 4. Verify Deployment
+
+```bash
+# Check all containers are running
+sudo docker compose ps
+
+# View logs
+sudo docker compose logs -f
+```
+
+### 5. Test the API
+
+**Using curl:**
+```bash
+curl http://localhost:3000/api/movies
+```
+
+**Using Postman:**
+- Import `postman_collection.json` into Postman
+- See `POSTMAN_GUIDE.md` for detailed instructions
+
+**Using Make:**
+```bash
+make test
+```
+
+## Documentation Files
+
+- **README.md** - Complete project documentation (this file)
+- **POSTMAN_GUIDE.md** - Detailed Postman testing guide
+- **API_QUICK_REFERENCE.md** - Quick reference for all API endpoints
+- **postman_collection.json** - Ready-to-import Postman collection
+- **.env.example** - Example environment configuration
+
 ## Configuration
 
 ### Environment Variables
@@ -245,7 +304,168 @@ The billing request is queued in RabbitMQ and processed asynchronously by the bi
 
 ## Testing
 
-### Complete Workflow Test
+### Testing with Postman
+
+Postman is a popular API testing tool with a graphical interface. Here's how to test the API using Postman:
+
+#### Option 1: Import the Postman Collection
+
+1. **Download and Install Postman**
+   - Visit [postman.com/downloads](https://www.postman.com/downloads/)
+   - Install Postman for your operating system
+
+2. **Import the Collection**
+   - Open Postman
+   - Click "Import" button (top left)
+   - Select the `postman_collection.json` file from the project root
+   - The collection will appear in your Collections sidebar
+
+3. **Run Requests**
+   - Expand "Movie Streaming Platform API" collection
+   - Click on any request to open it
+   - Click "Send" button to execute the request
+   - View the response in the bottom panel
+
+#### Option 2: Manual Setup in Postman
+
+**1. Create a New Collection**
+- Click "New" → "Collection"
+- Name it "Movie Streaming Platform"
+
+**2. Add Inventory Requests**
+
+**GET All Movies**
+```
+Method: GET
+URL: http://localhost:3000/api/movies
+```
+
+**GET Movie by ID**
+```
+Method: GET
+URL: http://localhost:3000/api/movies/1
+```
+
+**GET Movies by Title (Filter)**
+```
+Method: GET
+URL: http://localhost:3000/api/movies?title=Matrix
+```
+
+**POST Create Movie**
+```
+Method: POST
+URL: http://localhost:3000/api/movies
+Headers:
+  Content-Type: application/json
+Body (raw JSON):
+{
+  "title": "The Matrix",
+  "description": "A computer hacker learns about the true nature of reality"
+}
+```
+
+**PUT Update Movie**
+```
+Method: PUT
+URL: http://localhost:3000/api/movies/1
+Headers:
+  Content-Type: application/json
+Body (raw JSON):
+{
+  "title": "The Matrix Reloaded",
+  "description": "Updated description"
+}
+```
+
+**DELETE Movie by ID**
+```
+Method: DELETE
+URL: http://localhost:3000/api/movies/1
+```
+
+**DELETE All Movies**
+```
+Method: DELETE
+URL: http://localhost:3000/api/movies
+```
+
+**3. Add Billing Requests**
+
+**POST Create Order**
+```
+Method: POST
+URL: http://localhost:3000/api/billing/
+Headers:
+  Content-Type: application/json
+Body (raw JSON):
+{
+  "user_id": 1,
+  "number_of_items": 2,
+  "total_amount": 29.99
+}
+```
+
+#### Postman Testing Workflow
+
+1. **Start with GET All Movies** - Should return empty array initially
+2. **Create 2-3 Movies** - Use POST requests with different movie data
+3. **GET All Movies Again** - Verify movies were created
+4. **Filter Movies** - Test the title query parameter
+5. **Update a Movie** - Change title or description
+6. **Create Billing Orders** - Send several orders
+7. **Verify in Database** - Use terminal to check orders table
+
+#### Postman Tips
+
+- **Save Responses**: Click "Save Response" to keep examples
+- **Use Variables**: Create environment variables for `base_url`
+- **Tests Tab**: Add JavaScript tests to validate responses
+- **Collection Runner**: Run all requests sequentially
+- **Pre-request Scripts**: Generate dynamic data
+
+#### Example Postman Test Scripts
+
+Add these in the "Tests" tab of your requests:
+
+**For GET All Movies:**
+```javascript
+pm.test("Status code is 200", function () {
+    pm.response.to.have.status(200);
+});
+
+pm.test("Response has movies array", function () {
+    var jsonData = pm.response.json();
+    pm.expect(jsonData).to.have.property('movies');
+    pm.expect(jsonData.movies).to.be.an('array');
+});
+```
+
+**For POST Create Movie:**
+```javascript
+pm.test("Status code is 201", function () {
+    pm.response.to.have.status(201);
+});
+
+pm.test("Movie created successfully", function () {
+    var jsonData = pm.response.json();
+    pm.expect(jsonData.message).to.include("inserted successfully");
+});
+```
+
+**For POST Billing Order:**
+```javascript
+pm.test("Status code is 200", function () {
+    pm.response.to.have.status(200);
+});
+
+pm.test("Order sent to queue", function () {
+    var jsonData = pm.response.json();
+    pm.expect(jsonData.message).to.include("sent");
+});
+```
+
+### Complete Workflow Test (Command Line)
 
 ```bash
 # 1. Create movies in inventory
